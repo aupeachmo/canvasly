@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 const DEFAULT_DATA = {
   title: "Business Model Canvas",
@@ -15,15 +15,15 @@ const DEFAULT_DATA = {
 };
 
 const BLOCK_CONFIG = [
-  { key: "partners", label: "Key Partners", icon: "🤝", color: "#9b7bc8", gridArea: "1 / 1 / 3 / 3" },
-  { key: "activities", label: "Key Activities", icon: "⚡", color: "#c97b4b", gridArea: "1 / 3 / 2 / 5" },
-  { key: "resources", label: "Key Resources", icon: "🔑", color: "#4a7a9b", gridArea: "2 / 3 / 3 / 5" },
-  { key: "value", label: "Value Propositions", icon: "💎", color: "#5b8a72", gridArea: "1 / 5 / 3 / 7", highlight: true },
-  { key: "relations", label: "Customer Relationships", icon: "❤️", color: "#9e8a4e", gridArea: "1 / 7 / 2 / 9" },
-  { key: "channels", label: "Channels", icon: "📡", color: "#6b8f8a", gridArea: "2 / 7 / 3 / 9" },
-  { key: "segments", label: "Customer Segments", icon: "👥", color: "#a0706b", gridArea: "1 / 9 / 3 / 11" },
-  { key: "costs", label: "Cost Structure", icon: "💰", color: "#b5564e", gridArea: "3 / 1 / 4 / 6" },
-  { key: "revenue", label: "Revenue Streams", icon: "💵", color: "#7a9465", gridArea: "3 / 6 / 4 / 11" },
+  { key: "partners", label: "Key Partners", icon: "\u{1F91D}", color: "#9b7bc8", gridArea: "1 / 1 / 3 / 3" },
+  { key: "activities", label: "Key Activities", icon: "\u26A1", color: "#c97b4b", gridArea: "1 / 3 / 2 / 5" },
+  { key: "resources", label: "Key Resources", icon: "\u{1F511}", color: "#4a7a9b", gridArea: "2 / 3 / 3 / 5" },
+  { key: "value", label: "Value Propositions", icon: "\u{1F48E}", color: "#5b8a72", gridArea: "1 / 5 / 3 / 7", highlight: true },
+  { key: "relations", label: "Customer Relationships", icon: "\u2764\uFE0F", color: "#9e8a4e", gridArea: "1 / 7 / 2 / 9" },
+  { key: "channels", label: "Channels", icon: "\u{1F4E1}", color: "#6b8f8a", gridArea: "2 / 7 / 3 / 9" },
+  { key: "segments", label: "Customer Segments", icon: "\u{1F465}", color: "#a0706b", gridArea: "1 / 9 / 3 / 11" },
+  { key: "costs", label: "Cost Structure", icon: "\u{1F4B0}", color: "#b5564e", gridArea: "3 / 1 / 4 / 6" },
+  { key: "revenue", label: "Revenue Streams", icon: "\u{1F4B5}", color: "#7a9465", gridArea: "3 / 6 / 4 / 11" },
 ];
 
 const EXAMPLE_DATA = {
@@ -39,6 +39,38 @@ const EXAMPLE_DATA = {
   costs: ["Rent & utilities", "Staff wages", "Coffee beans & supplies", "Equipment", "Marketing"],
   revenue: ["Beverage sales", "Pastry & food sales", "Merchandise", "Catering", "Subscriptions"],
 };
+
+const DOCS_KEY = "canvasly-documents";
+const OLD_KEY = "canvasly-data";
+const DESIGN_WIDTH = 1320;
+
+function newId() {
+  return crypto.randomUUID();
+}
+
+function loadSavedDocs() {
+  try {
+    const old = localStorage.getItem(OLD_KEY);
+    if (old) {
+      const data = JSON.parse(old);
+      const id = newId();
+      const docs = { [id]: { data, updatedAt: Date.now() } };
+      localStorage.setItem(DOCS_KEY, JSON.stringify(docs));
+      localStorage.removeItem(OLD_KEY);
+      return docs;
+    }
+    const raw = localStorage.getItem(DOCS_KEY);
+    if (raw) {
+      const docs = JSON.parse(raw);
+      if (Object.keys(docs).length > 0) return docs;
+    }
+  } catch { /* ignore corrupt data */ }
+  return null;
+}
+
+function persistDocs(docs) {
+  localStorage.setItem(DOCS_KEY, JSON.stringify(docs));
+}
 
 function EditableBlock({ config, items, onChange }) {
   const isBottom = config.key === "costs" || config.key === "revenue";
@@ -148,7 +180,7 @@ function EditableBlock({ config, items, onChange }) {
                 }}
                 onMouseEnter={(e) => e.target.style.opacity = 1}
                 onMouseLeave={(e) => e.target.style.opacity = 0}
-              >✕</button>
+              >{"\u2715"}</button>
             )}
           </div>
         ))}
@@ -170,48 +202,230 @@ function EditableBlock({ config, items, onChange }) {
   );
 }
 
-const STORAGE_KEY = "canvasly-data";
-
-function getSavedData() {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) return { ...DEFAULT_DATA, ...JSON.parse(stored) };
-  } catch { /* ignore corrupt data */ }
-  return null;
-}
-
-// null = no saved data (or already resolved), object = awaiting user decision
-const INITIAL_SAVED = getSavedData();
-
-export default function BusinessModelCanvas() {
-  const [data, setData] = useState(DEFAULT_DATA);
-  const [pendingRestore, setPendingRestore] = useState(INITIAL_SAVED);
-  const resolved = pendingRestore === null;
+function DocDropdown({ documents, activeDocId, onSelect, onNew, onDelete, onDeleteAll }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
 
   useEffect(() => {
-    if (!resolved) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }, [data, resolved]);
+    if (!open) return;
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
 
-  const handleRestore = () => {
-    if (pendingRestore) setData(pendingRestore);
-    setPendingRestore(null);
-  };
+  const entries = Object.entries(documents).sort((a, b) => b[1].updatedAt - a[1].updatedAt);
+  const activeDoc = activeDocId && documents[activeDocId];
+  const label = activeDoc ? (activeDoc.data.title || "Untitled") : "My Canvases";
 
-  const handleDiscard = () => {
-    localStorage.removeItem(STORAGE_KEY);
-    setPendingRestore(null);
-  };
+  return (
+    <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
+      <button
+        onClick={() => setOpen(!open)}
+        style={{
+          background: "#1a1a1a", border: "1px solid #2a2a2a",
+          color: "#8a8580", padding: "8px 16px", borderRadius: 6,
+          cursor: "pointer", fontSize: "0.78rem",
+          fontFamily: "'DM Sans', sans-serif", transition: "all 0.15s",
+          display: "flex", alignItems: "center", gap: 6,
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#555"; e.currentTarget.style.color = "#e8e4df"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#8a8580"; }}
+      >
+        {"\u{1F4CB}"} {label} {"\u25BE"}
+      </button>
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 4px)", left: "50%", transform: "translateX(-50%)",
+          background: "#1a1a1a", border: "1px solid #333", borderRadius: 8,
+          minWidth: 260, zIndex: 100, overflow: "hidden",
+          boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+        }}>
+          {entries.map(([id, doc]) => (
+            <div
+              key={id}
+              style={{
+                display: "flex", alignItems: "center", gap: 8,
+                padding: "8px 12px", cursor: "pointer",
+                background: id === activeDocId ? "#252525" : "transparent",
+                borderLeft: id === activeDocId ? "2px solid #5b8a72" : "2px solid transparent",
+              }}
+              onClick={() => { onSelect(id); setOpen(false); }}
+              onMouseEnter={(e) => { if (id !== activeDocId) e.currentTarget.style.background = "#1f1f1f"; }}
+              onMouseLeave={(e) => { if (id !== activeDocId) e.currentTarget.style.background = "transparent"; }}
+            >
+              <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+                <div style={{
+                  fontSize: "0.78rem",
+                  color: id === activeDocId ? "#e8e4df" : "#8a8580",
+                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                }}>
+                  {doc.data.title || "Untitled"}
+                </div>
+                {doc.data.subtitle && (
+                  <div style={{
+                    fontSize: "0.65rem", color: "#555",
+                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                  }}>
+                    {doc.data.subtitle}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={(e) => { e.stopPropagation(); onDelete(id); }}
+                style={{
+                  background: "none", border: "none", color: "#444",
+                  cursor: "pointer", padding: "2px 4px", fontSize: "0.7rem", flexShrink: 0,
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = "#b5564e"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = "#444"; }}
+              >{"\u2715"}</button>
+            </div>
+          ))}
+          <div style={{ borderTop: "1px solid #2a2a2a" }}>
+            <div
+              onClick={() => { onNew(); setOpen(false); }}
+              style={{ padding: "8px 14px", cursor: "pointer", color: "#5b8a72", fontSize: "0.78rem" }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "#1f1f1f"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+            >+ New Canvas</div>
+            {entries.length > 1 && (
+              <div
+                onClick={() => { onDeleteAll(); setOpen(false); }}
+                style={{ padding: "8px 14px", cursor: "pointer", color: "#b5564e", fontSize: "0.78rem" }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#1f1f1f"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+              >Delete All</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const INITIAL_SAVED = loadSavedDocs();
+
+export default function BusinessModelCanvas() {
+  const [documents, setDocuments] = useState({});
+  const [activeDocId, setActiveDocId] = useState(() => INITIAL_SAVED ? null : newId());
+  const [data, setData] = useState(DEFAULT_DATA);
+  const [pending, setPending] = useState(INITIAL_SAVED);
+  const resolved = pending === null;
+  const docsRef = useRef({});
+
+  const [scale, setScale] = useState(1);
+
+  // Responsive scaling
+  useEffect(() => {
+    function onResize() {
+      setScale(Math.min(1, document.documentElement.clientWidth / DESIGN_WIDTH));
+    }
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  // Auto-save current document
+  useEffect(() => {
+    if (!resolved || !activeDocId) return;
+    const updated = { ...docsRef.current, [activeDocId]: { data, updatedAt: Date.now() } };
+    docsRef.current = updated;
+    setDocuments(updated);
+    persistDocs(updated);
+  }, [data, resolved, activeDocId]);
 
   const update = (key, value) => setData((d) => ({ ...d, [key]: value }));
+
+  // Banner actions
+  const restoreDoc = (id) => {
+    if (!pending) return;
+    setData({ ...DEFAULT_DATA, ...pending[id].data });
+    setActiveDocId(id);
+    docsRef.current = pending;
+    setDocuments(pending);
+    setPending(null);
+  };
+
+  const startFresh = () => {
+    if (pending) {
+      docsRef.current = pending;
+      setDocuments(pending);
+    }
+    setActiveDocId(newId());
+    setData(DEFAULT_DATA);
+    setPending(null);
+  };
+
+  const discardAll = () => {
+    localStorage.removeItem(DOCS_KEY);
+    docsRef.current = {};
+    setDocuments({});
+    setActiveDocId(newId());
+    setPending(null);
+  };
+
+  // Document management
+  const selectDoc = (id) => {
+    if (id === activeDocId) return;
+    const doc = docsRef.current[id];
+    if (!doc) return;
+    setData({ ...DEFAULT_DATA, ...doc.data });
+    setActiveDocId(id);
+  };
+
+  const newCanvas = () => {
+    setActiveDocId(newId());
+    setData(DEFAULT_DATA);
+  };
+
+  const deleteDoc = (id) => {
+    const next = { ...docsRef.current };
+    delete next[id];
+    docsRef.current = next;
+    setDocuments(next);
+    if (Object.keys(next).length > 0) {
+      persistDocs(next);
+    } else {
+      localStorage.removeItem(DOCS_KEY);
+    }
+    if (id === activeDocId) {
+      const keys = Object.keys(next);
+      if (keys.length > 0) {
+        setData({ ...DEFAULT_DATA, ...next[keys[0]].data });
+        setActiveDocId(keys[0]);
+      } else {
+        setActiveDocId(newId());
+        setData(DEFAULT_DATA);
+      }
+    }
+  };
+
+  const deleteAllDocs = () => {
+    localStorage.removeItem(DOCS_KEY);
+    docsRef.current = {};
+    setDocuments({});
+    setActiveDocId(newId());
+    setData(DEFAULT_DATA);
+  };
+
+  const loadExample = () => setData(EXAMPLE_DATA);
+  const clearCanvas = () => setData(DEFAULT_DATA);
 
   const handleExportPDF = () => {
     const style = document.createElement("style");
     style.textContent = `
+      @page { size: landscape; margin: 10mm; }
       @media print {
         body * { visibility: hidden !important; }
         .print-area, .print-area * { visibility: visible !important; }
-        .print-area { position: fixed !important; top: 0; left: 0; width: 100vw; height: 100vh; padding: 20px !important; }
+        .print-area {
+          position: fixed !important; top: 0; left: 0;
+          width: 100vw; height: 100vh;
+          padding: 20px !important;
+          zoom: 1 !important;
+        }
         .print-hide { display: none !important; }
         .remove-btn { display: none !important; }
         input { border-bottom: none !important; }
@@ -247,154 +461,190 @@ export default function BusinessModelCanvas() {
     e.target.value = "";
   };
 
-  const loadExample = () => setData(EXAMPLE_DATA);
-  const clearAll = () => setData(DEFAULT_DATA);
+  const docCount = Object.keys(documents).length;
+  const pendingEntries = pending ? Object.entries(pending).sort((a, b) => b[1].updatedAt - a[1].updatedAt) : [];
 
   return (
     <div style={{
       background: "#0f0f0f",
       minHeight: "100vh",
-      padding: "24px",
-      fontFamily: "'DM Sans', sans-serif",
-      color: "#e8e4df",
+      overflow: "hidden",
       backgroundImage: "radial-gradient(ellipse at 20% 0%, rgba(201,123,75,0.05) 0%, transparent 50%), radial-gradient(ellipse at 80% 100%, rgba(91,138,114,0.05) 0%, transparent 50%)",
     }}>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+      <div style={{
+        zoom: scale,
+        minWidth: DESIGN_WIDTH,
+        padding: "24px",
+        fontFamily: "'DM Sans', sans-serif",
+        color: "#e8e4df",
+      }}>
+        <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
 
-      {/* Restore banner */}
-      {pendingRestore && (
-        <div className="print-hide" style={{
-          maxWidth: 1280, margin: "0 auto 16px", padding: "12px 16px",
-          background: "#1a1f1c", border: "1px solid #5b8a7244",
-          borderRadius: 8, display: "flex", alignItems: "center",
-          justifyContent: "space-between", flexWrap: "wrap", gap: 8,
-        }}>
-          <span style={{ color: "#8a8580", fontSize: "0.82rem" }}>
-            You have a previous canvas saved locally. Would you like to restore it?
-          </span>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={handleRestore} style={{
-              background: "#5b8a72", border: "none", color: "#fff",
-              padding: "6px 14px", borderRadius: 5, cursor: "pointer",
-              fontSize: "0.78rem", fontFamily: "'DM Sans', sans-serif",
-            }}>Restore</button>
-            <button onClick={handleDiscard} style={{
-              background: "transparent", border: "1px solid #444",
-              color: "#8a8580", padding: "6px 14px", borderRadius: 5,
-              cursor: "pointer", fontSize: "0.78rem", fontFamily: "'DM Sans', sans-serif",
-            }}>Discard</button>
+        {/* Restore banner */}
+        {pending && (
+          <div className="print-hide" style={{
+            maxWidth: 1280, margin: "0 auto 16px", padding: "16px 20px",
+            background: "#1a1f1c", border: "1px solid #5b8a7244",
+            borderRadius: 8,
+          }}>
+            <div style={{ color: "#8a8580", fontSize: "0.82rem", marginBottom: 12 }}>
+              You have {pendingEntries.length} saved canvas{pendingEntries.length !== 1 ? "es" : ""}. Pick one to restore or start fresh.
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+              {pendingEntries.map(([id, doc]) => (
+                <button
+                  key={id}
+                  onClick={() => restoreDoc(id)}
+                  style={{
+                    background: "#252525", border: "1px solid #333", color: "#e8e4df",
+                    padding: "8px 14px", borderRadius: 6, cursor: "pointer",
+                    fontSize: "0.78rem", fontFamily: "'DM Sans', sans-serif",
+                    textAlign: "left", transition: "all 0.15s",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#5b8a72"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#333"; }}
+                >
+                  <div>{doc.data.title || "Untitled"}</div>
+                  {doc.data.subtitle && (
+                    <div style={{ fontSize: "0.65rem", color: "#666", marginTop: 2 }}>{doc.data.subtitle}</div>
+                  )}
+                </button>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={startFresh} style={{
+                background: "#5b8a72", border: "none", color: "#fff",
+                padding: "6px 14px", borderRadius: 5, cursor: "pointer",
+                fontSize: "0.78rem", fontFamily: "'DM Sans', sans-serif",
+              }}>Start Fresh</button>
+              <button onClick={discardAll} style={{
+                background: "transparent", border: "1px solid #444",
+                color: "#8a8580", padding: "6px 14px", borderRadius: 5,
+                cursor: "pointer", fontSize: "0.78rem", fontFamily: "'DM Sans', sans-serif",
+              }}>Discard All</button>
+            </div>
+          </div>
+        )}
+
+        <div className="print-area">
+          {/* Header */}
+          <div style={{ textAlign: "center", marginBottom: "20px" }}>
+            <input
+              value={data.title}
+              onChange={(e) => update("title", e.target.value)}
+              style={{
+                background: "transparent", border: "none", outline: "none",
+                color: "#e8e4df", fontFamily: "'DM Serif Display', serif",
+                fontSize: "2rem", textAlign: "center", width: "100%",
+                letterSpacing: "-0.5px",
+              }}
+            />
+            <input
+              value={data.subtitle}
+              onChange={(e) => update("subtitle", e.target.value)}
+              placeholder="Your Company Name"
+              style={{
+                background: "transparent", border: "none", outline: "none",
+                color: "#8a8580", fontSize: "0.85rem", textAlign: "center",
+                width: "100%", letterSpacing: "2px", textTransform: "uppercase",
+                fontWeight: 500,
+              }}
+            />
+          </div>
+
+          {/* Canvas Grid */}
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(10, 1fr)",
+            gridTemplateRows: "minmax(180px, 1fr) minmax(180px, 1fr) minmax(100px, auto)",
+            gap: "2px",
+            maxWidth: 1280,
+            margin: "0 auto",
+            background: "#2a2a2a",
+            border: "2px solid #2a2a2a",
+            borderRadius: 12,
+            overflow: "hidden",
+          }}>
+            {BLOCK_CONFIG.map((cfg) => (
+              <EditableBlock
+                key={cfg.key}
+                config={cfg}
+                items={data[cfg.key]}
+                onChange={(v) => update(cfg.key, v)}
+              />
+            ))}
+          </div>
+
+          <div style={{
+            textAlign: "center", marginTop: 16, color: "#8a8580",
+            fontSize: "0.65rem", letterSpacing: 1, textTransform: "uppercase", opacity: "0.4",
+          }}>
+            Business Model Canvas Framework {"\u2014"} Osterwalder &amp; Pigneur
           </div>
         </div>
-      )}
 
-      <div className="print-area">
-        {/* Header */}
-        <div style={{ textAlign: "center", marginBottom: "20px" }}>
-          <input
-            value={data.title}
-            onChange={(e) => update("title", e.target.value)}
-            style={{
-              background: "transparent", border: "none", outline: "none",
-              color: "#e8e4df", fontFamily: "'DM Serif Display', serif",
-              fontSize: "2rem", textAlign: "center", width: "100%",
-              letterSpacing: "-0.5px",
-            }}
-          />
-          <input
-            value={data.subtitle}
-            onChange={(e) => update("subtitle", e.target.value)}
-            placeholder="Your Company Name"
-            style={{
-              background: "transparent", border: "none", outline: "none",
-              color: "#8a8580", fontSize: "0.85rem", textAlign: "center",
-              width: "100%", letterSpacing: "2px", textTransform: "uppercase",
-              fontWeight: 500,
-            }}
-          />
-        </div>
-
-        {/* Canvas Grid */}
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(10, 1fr)",
-          gridTemplateRows: "minmax(180px, 1fr) minmax(180px, 1fr) minmax(100px, auto)",
-          gap: "2px",
-          maxWidth: 1280,
-          margin: "0 auto",
-          background: "#2a2a2a",
-          border: "2px solid #2a2a2a",
-          borderRadius: 12,
-          overflow: "hidden",
+        {/* Toolbar */}
+        <div className="print-hide" style={{
+          display: "flex", justifyContent: "center", gap: 8,
+          marginTop: 20, flexWrap: "wrap", alignItems: "center",
         }}>
-          {BLOCK_CONFIG.map((cfg) => (
-            <EditableBlock
-              key={cfg.key}
-              config={cfg}
-              items={data[cfg.key]}
-              onChange={(v) => update(cfg.key, v)}
+          {resolved && docCount > 0 && (
+            <DocDropdown
+              documents={documents}
+              activeDocId={activeDocId}
+              onSelect={selectDoc}
+              onNew={newCanvas}
+              onDelete={deleteDoc}
+              onDeleteAll={deleteAllDocs}
             />
+          )}
+          {[
+            { label: "\u{1F4C4} Export PDF", action: handleExportPDF },
+            { label: "\u{1F4BE} Save JSON", action: handleExportJSON },
+            { label: "\u{1F4C2} Load JSON", action: () => document.getElementById("json-import").click() },
+            { label: "\u2615 Load Example", action: loadExample },
+            { label: "\u{1F5D1} Clear", action: clearCanvas },
+          ].map((btn) => (
+            <button
+              key={btn.label}
+              onClick={btn.action}
+              style={{
+                background: "#1a1a1a",
+                border: "1px solid #2a2a2a",
+                color: "#8a8580",
+                padding: "8px 16px",
+                borderRadius: 6,
+                cursor: "pointer",
+                fontSize: "0.78rem",
+                fontFamily: "'DM Sans', sans-serif",
+                transition: "all 0.15s",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#555"; e.currentTarget.style.color = "#e8e4df"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#8a8580"; }}
+            >{btn.label}</button>
           ))}
+          <input
+            id="json-import"
+            type="file"
+            accept=".json"
+            onChange={handleImportJSON}
+            style={{ display: "none" }}
+          />
         </div>
 
-        <div style={{
-          textAlign: "center", marginTop: 16, color: "#8a8580",
-          fontSize: "0.65rem", letterSpacing: 1, textTransform: "uppercase", opacity: "0.4",
-        }}>
-          Business Model Canvas Framework — Osterwalder &amp; Pigneur
-        </div>
-      </div>
-
-      {/* Toolbar */}
-      <div className="print-hide" style={{
-        display: "flex", justifyContent: "center", gap: 8,
-        marginTop: 20, flexWrap: "wrap",
-      }}>
-        {[
-          { label: "📄 Export PDF", action: handleExportPDF },
-          { label: "💾 Save JSON", action: handleExportJSON },
-          { label: "📂 Load JSON", action: () => document.getElementById("json-import").click() },
-          { label: "☕ Load Example", action: loadExample },
-          { label: "🗑 Clear All", action: clearAll },
-        ].map((btn) => (
-          <button
-            key={btn.label}
-            onClick={btn.action}
-            style={{
-              background: "#1a1a1a",
-              border: "1px solid #2a2a2a",
-              color: "#8a8580",
-              padding: "8px 16px",
-              borderRadius: 6,
-              cursor: "pointer",
-              fontSize: "0.78rem",
-              fontFamily: "'DM Sans', sans-serif",
-              transition: "all 0.15s",
-            }}
-            onMouseEnter={(e) => { e.target.style.borderColor = "#555"; e.target.style.color = "#e8e4df"; }}
-            onMouseLeave={(e) => { e.target.style.borderColor = "#2a2a2a"; e.target.style.color = "#8a8580"; }}
-          >{btn.label}</button>
-        ))}
-        <input
-          id="json-import"
-          type="file"
-          accept=".json"
-          onChange={handleImportJSON}
-          style={{ display: "none" }}
-        />
-      </div>
-
-      <p className="print-hide" style={{
-        textAlign: "center", color: "#555", fontSize: "0.7rem", marginTop: 12,
-      }}>
-        Click any field to edit · Press Enter to add items · Export PDF opens your browser's print dialog (choose "Save as PDF")
-      </p>
-      {resolved && (
         <p className="print-hide" style={{
-          textAlign: "center", color: "#444", fontSize: "0.65rem", marginTop: 6,
+          textAlign: "center", color: "#555", fontSize: "0.7rem", marginTop: 12,
         }}>
-          Changes are automatically saved to your browser
+          Click any field to edit {"\u00B7"} Press Enter to add items
         </p>
-      )}
+        {resolved && (
+          <p className="print-hide" style={{
+            textAlign: "center", color: "#444", fontSize: "0.65rem", marginTop: 6,
+          }}>
+            Changes are automatically saved to your browser
+          </p>
+        )}
+      </div>
     </div>
   );
 }
