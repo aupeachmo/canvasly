@@ -42,7 +42,7 @@ const EXAMPLE_DATA = {
 
 const DOCS_KEY = "canvasly-documents";
 const OLD_KEY = "canvasly-data";
-const DESIGN_WIDTH = 1320;
+const COMPACT_BREAKPOINT = 768;
 
 function newId() {
   return crypto.randomUUID();
@@ -72,8 +72,8 @@ function persistDocs(docs) {
   localStorage.setItem(DOCS_KEY, JSON.stringify(docs));
 }
 
-function EditableBlock({ config, items, onChange }) {
-  const isBottom = config.key === "costs" || config.key === "revenue";
+function EditableBlock({ config, items, onChange, compact }) {
+  const isBottom = !compact && (config.key === "costs" || config.key === "revenue");
 
   const updateItem = (index, value) => {
     const next = [...items];
@@ -107,7 +107,7 @@ function EditableBlock({ config, items, onChange }) {
     <div
       className="no-break"
       style={{
-        gridArea: config.gridArea,
+        gridArea: compact ? "auto" : config.gridArea,
         background: config.highlight ? "#1a1f1c" : "#1a1a1a",
         padding: "16px 14px",
         position: "relative",
@@ -315,14 +315,13 @@ export default function BusinessModelCanvas() {
   const resolved = pending === null;
   const docsRef = useRef({});
 
-  const [scale, setScale] = useState(1);
+  const [compact, setCompact] = useState(() => window.innerWidth < COMPACT_BREAKPOINT);
 
-  // Responsive scaling
+  // Responsive breakpoint
   useEffect(() => {
     function onResize() {
-      setScale(Math.min(1, document.documentElement.clientWidth / DESIGN_WIDTH));
+      setCompact(window.innerWidth < COMPACT_BREAKPOINT);
     }
-    onResize();
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
@@ -418,18 +417,36 @@ export default function BusinessModelCanvas() {
     style.textContent = `
       @page { size: landscape; margin: 10mm; }
       @media print {
+        *, *::before, *::after {
+          print-color-adjust: exact !important;
+          -webkit-print-color-adjust: exact !important;
+        }
+        body { background: #fff !important; }
         body * { visibility: hidden !important; }
         .print-area, .print-area * { visibility: visible !important; }
         .print-area {
           position: fixed !important; top: 0; left: 0;
           width: 100vw; height: 100vh;
           padding: 20px !important;
-          zoom: 1 !important;
+          background: #fff !important;
+        }
+        .print-area input {
+          color: #333 !important;
+        }
+        .print-area input::placeholder { color: transparent !important; }
+        .canvas-grid {
+          background: #ddd !important;
+          border-color: #ddd !important;
+        }
+        .no-break {
+          background: #fff !important;
+        }
+        .canvas-attribution {
+          color: #999 !important;
+          opacity: 1 !important;
         }
         .print-hide { display: none !important; }
         .remove-btn { display: none !important; }
-        input { border-bottom: none !important; }
-        input::placeholder { color: transparent !important; }
       }
     `;
     document.head.appendChild(style);
@@ -468,22 +485,17 @@ export default function BusinessModelCanvas() {
     <div style={{
       background: "#0f0f0f",
       minHeight: "100vh",
-      overflow: "hidden",
+      padding: "24px",
+      fontFamily: "'DM Sans', sans-serif",
+      color: "#e8e4df",
       backgroundImage: "radial-gradient(ellipse at 20% 0%, rgba(201,123,75,0.05) 0%, transparent 50%), radial-gradient(ellipse at 80% 100%, rgba(91,138,114,0.05) 0%, transparent 50%)",
     }}>
-      <div style={{
-        zoom: scale,
-        minWidth: DESIGN_WIDTH,
-        padding: "24px",
-        fontFamily: "'DM Sans', sans-serif",
-        color: "#e8e4df",
-      }}>
         <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
 
         {/* Restore banner */}
         {pending && (
           <div className="print-hide" style={{
-            maxWidth: 1280, margin: "0 auto 16px", padding: "16px 20px",
+            margin: "0 auto 16px", padding: "16px 20px",
             background: "#1a1f1c", border: "1px solid #5b8a7244",
             borderRadius: 8,
           }}>
@@ -553,12 +565,11 @@ export default function BusinessModelCanvas() {
           </div>
 
           {/* Canvas Grid */}
-          <div style={{
+          <div className="canvas-grid" style={{
             display: "grid",
-            gridTemplateColumns: "repeat(10, 1fr)",
-            gridTemplateRows: "minmax(180px, 1fr) minmax(180px, 1fr) minmax(100px, auto)",
+            gridTemplateColumns: compact ? "1fr" : "repeat(10, 1fr)",
+            gridTemplateRows: compact ? undefined : "minmax(180px, 1fr) minmax(180px, 1fr) minmax(100px, auto)",
             gap: "2px",
-            maxWidth: 1280,
             margin: "0 auto",
             background: "#2a2a2a",
             border: "2px solid #2a2a2a",
@@ -571,11 +582,12 @@ export default function BusinessModelCanvas() {
                 config={cfg}
                 items={data[cfg.key]}
                 onChange={(v) => update(cfg.key, v)}
+                compact={compact}
               />
             ))}
           </div>
 
-          <div style={{
+          <div className="canvas-attribution" style={{
             textAlign: "center", marginTop: 16, color: "#8a8580",
             fontSize: "0.65rem", letterSpacing: 1, textTransform: "uppercase", opacity: "0.4",
           }}>
@@ -644,7 +656,6 @@ export default function BusinessModelCanvas() {
             Changes are automatically saved to your browser
           </p>
         )}
-      </div>
     </div>
   );
 }
