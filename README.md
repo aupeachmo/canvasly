@@ -1,5 +1,7 @@
 # Canvasly — Business Model Canvas
 
+**https://aupeachmo.github.io/canvasly/**
+
 An interactive, editable Business Model Canvas you can fill in and export as PDF.
 
 ## Deploy to GitHub Pages
