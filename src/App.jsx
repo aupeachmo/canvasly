@@ -74,6 +74,15 @@ function persistDocs(docs) {
 
 function EditableBlock({ config, items, onChange, compact }) {
   const isBottom = !compact && (config.key === "costs" || config.key === "revenue");
+  const itemsRef = useRef(null);
+
+  useEffect(() => {
+    if (!itemsRef.current) return;
+    itemsRef.current.querySelectorAll("textarea").forEach((el) => {
+      el.style.height = "auto";
+      el.style.height = el.scrollHeight + "px";
+    });
+  }, [items, compact]);
 
   const updateItem = (index, value) => {
     const next = [...items];
@@ -93,7 +102,7 @@ function EditableBlock({ config, items, onChange, compact }) {
       e.preventDefault();
       addItem();
       setTimeout(() => {
-        const inputs = e.target.closest(".block-items")?.querySelectorAll("input");
+        const inputs = e.target.closest(".block-items")?.querySelectorAll("textarea");
         inputs?.[inputs.length - 1]?.focus();
       }, 50);
     }
@@ -132,31 +141,40 @@ function EditableBlock({ config, items, onChange, compact }) {
         <span style={{ fontSize: "0.8rem" }}>{config.icon}</span>
         {config.label}
       </div>
-      <div className="block-items" style={{
+      <div className="block-items" ref={itemsRef} style={{
         display: "flex",
         flexDirection: isBottom ? "row" : "column",
         flexWrap: isBottom ? "wrap" : "nowrap",
         gap: isBottom ? "4px 10px" : "4px",
         flex: 1,
         overflowY: "auto",
+        minWidth: 0,
       }}>
         {items.map((item, i) => (
           <div key={i} style={{
             display: "flex",
-            alignItems: "center",
+            alignItems: "flex-start",
             gap: "4px",
             position: "relative",
-            minWidth: isBottom ? "auto" : undefined,
+            maxWidth: "100%",
+            width: isBottom ? "auto" : "100%",
+            minWidth: isBottom ? 80 : undefined,
           }}>
             <span style={{
               width: 4, height: 4, borderRadius: "50%",
               background: config.color, flexShrink: 0, opacity: "0.7",
+              marginTop: 9,
             }} />
-            <input
+            <textarea
               value={item}
-              onChange={(e) => updateItem(i, e.target.value)}
+              onChange={(e) => {
+                updateItem(i, e.target.value);
+                e.target.style.height = "auto";
+                e.target.style.height = e.target.scrollHeight + "px";
+              }}
               onKeyDown={(e) => handleKeyDown(e, i)}
               placeholder="Type here..."
+              rows={1}
               style={{
                 background: "transparent",
                 border: "none",
@@ -165,8 +183,13 @@ function EditableBlock({ config, items, onChange, compact }) {
                 fontSize: "0.78rem",
                 lineHeight: "1.5",
                 fontFamily: "'DM Sans', sans-serif",
-                width: isBottom ? `${Math.max(80, item.length * 75 / 10 + 20)}px` : "100%",
+                width: "100%",
+                maxWidth: "100%",
                 padding: "2px 0",
+                resize: "none",
+                overflow: "hidden",
+                overflowWrap: "break-word",
+                wordBreak: "break-word",
               }}
             />
             {items.length > 1 && (
@@ -430,10 +453,10 @@ export default function BusinessModelCanvas() {
           padding: 20px !important;
           background: #fff !important;
         }
-        .print-area input {
+        .print-area input, .print-area textarea {
           color: #333 !important;
         }
-        .print-area input::placeholder { color: transparent !important; }
+        .print-area input::placeholder, .print-area textarea::placeholder { color: transparent !important; }
         .canvas-grid {
           background: #ddd !important;
           border-color: #ddd !important;
