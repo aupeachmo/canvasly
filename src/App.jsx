@@ -436,45 +436,59 @@ export default function BusinessModelCanvas() {
   const clearCanvas = () => setData(DEFAULT_DATA);
 
   const handleExportPDF = () => {
-    const style = document.createElement("style");
-    style.textContent = `
-      @page { size: landscape; margin: 10mm; }
-      @media print {
-        *, *::before, *::after {
-          print-color-adjust: exact !important;
-          -webkit-print-color-adjust: exact !important;
+    // Force full grid layout for printing regardless of viewport size
+    setCompact(false);
+
+    setTimeout(() => {
+      // Resize textareas after layout change
+      document.querySelectorAll('.print-area textarea').forEach((el) => {
+        el.style.height = 'auto';
+        el.style.height = el.scrollHeight + 'px';
+      });
+
+      const style = document.createElement("style");
+      style.textContent = `
+        @page { size: landscape; margin: 10mm; }
+        @media print {
+          *, *::before, *::after {
+            print-color-adjust: exact !important;
+            -webkit-print-color-adjust: exact !important;
+          }
+          body { background: #fff !important; }
+          body * { visibility: hidden !important; }
+          .print-area, .print-area * { visibility: visible !important; }
+          .print-area {
+            position: fixed !important; top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            padding: 20px !important;
+            background: #fff !important;
+          }
+          .print-area input, .print-area textarea {
+            color: #333 !important;
+          }
+          .print-area input::placeholder, .print-area textarea::placeholder { color: transparent !important; }
+          .canvas-grid {
+            background: #ddd !important;
+            border-color: #ddd !important;
+          }
+          .no-break {
+            background: #fff !important;
+          }
+          .canvas-attribution {
+            color: #999 !important;
+            opacity: 1 !important;
+          }
+          .print-hide { display: none !important; }
+          .remove-btn { display: none !important; }
         }
-        body { background: #fff !important; }
-        body * { visibility: hidden !important; }
-        .print-area, .print-area * { visibility: visible !important; }
-        .print-area {
-          position: fixed !important; top: 0; left: 0;
-          width: 100vw; height: 100vh;
-          padding: 20px !important;
-          background: #fff !important;
-        }
-        .print-area input, .print-area textarea {
-          color: #333 !important;
-        }
-        .print-area input::placeholder, .print-area textarea::placeholder { color: transparent !important; }
-        .canvas-grid {
-          background: #ddd !important;
-          border-color: #ddd !important;
-        }
-        .no-break {
-          background: #fff !important;
-        }
-        .canvas-attribution {
-          color: #999 !important;
-          opacity: 1 !important;
-        }
-        .print-hide { display: none !important; }
-        .remove-btn { display: none !important; }
-      }
-    `;
-    document.head.appendChild(style);
-    window.print();
-    setTimeout(() => document.head.removeChild(style), 500);
+      `;
+      document.head.appendChild(style);
+      window.print();
+      setTimeout(() => {
+        document.head.removeChild(style);
+        setCompact(window.innerWidth < COMPACT_BREAKPOINT);
+      }, 500);
+    }, 100);
   };
 
   const handleExportJSON = () => {
