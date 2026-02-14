@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useEffect } from "react";
 
 const DEFAULT_DATA = {
   title: "Business Model Canvas",
@@ -118,7 +118,7 @@ function EditableBlock({ config, items, onChange }) {
           }}>
             <span style={{
               width: 4, height: 4, borderRadius: "50%",
-              background: config.color, flexShrink: 0, opacity: 0.7,
+              background: config.color, flexShrink: 0, opacity: "0.7",
             }} />
             <input
               value={item}
@@ -131,9 +131,9 @@ function EditableBlock({ config, items, onChange }) {
                 outline: "none",
                 color: "#8a8580",
                 fontSize: "0.78rem",
-                lineHeight: 1.5,
+                lineHeight: "1.5",
                 fontFamily: "'DM Sans', sans-serif",
-                width: isBottom ? `${Math.max(80, item.length * 7.5 + 20)}px` : "100%",
+                width: isBottom ? `${Math.max(80, item.length * 75 / 10 + 20)}px` : "100%",
                 padding: "2px 0",
               }}
             />
@@ -170,9 +170,38 @@ function EditableBlock({ config, items, onChange }) {
   );
 }
 
+const STORAGE_KEY = "canvasly-data";
+
+function getSavedData() {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) return { ...DEFAULT_DATA, ...JSON.parse(stored) };
+  } catch { /* ignore corrupt data */ }
+  return null;
+}
+
+// null = no saved data (or already resolved), object = awaiting user decision
+const INITIAL_SAVED = getSavedData();
+
 export default function BusinessModelCanvas() {
   const [data, setData] = useState(DEFAULT_DATA);
-  const [showExport, setShowExport] = useState(false);
+  const [pendingRestore, setPendingRestore] = useState(INITIAL_SAVED);
+  const resolved = pendingRestore === null;
+
+  useEffect(() => {
+    if (!resolved) return;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  }, [data, resolved]);
+
+  const handleRestore = () => {
+    if (pendingRestore) setData(pendingRestore);
+    setPendingRestore(null);
+  };
+
+  const handleDiscard = () => {
+    localStorage.removeItem(STORAGE_KEY);
+    setPendingRestore(null);
+  };
 
   const update = (key, value) => setData((d) => ({ ...d, [key]: value }));
 
@@ -232,6 +261,32 @@ export default function BusinessModelCanvas() {
     }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
 
+      {/* Restore banner */}
+      {pendingRestore && (
+        <div className="print-hide" style={{
+          maxWidth: 1280, margin: "0 auto 16px", padding: "12px 16px",
+          background: "#1a1f1c", border: "1px solid #5b8a7244",
+          borderRadius: 8, display: "flex", alignItems: "center",
+          justifyContent: "space-between", flexWrap: "wrap", gap: 8,
+        }}>
+          <span style={{ color: "#8a8580", fontSize: "0.82rem" }}>
+            You have a previous canvas saved locally. Would you like to restore it?
+          </span>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={handleRestore} style={{
+              background: "#5b8a72", border: "none", color: "#fff",
+              padding: "6px 14px", borderRadius: 5, cursor: "pointer",
+              fontSize: "0.78rem", fontFamily: "'DM Sans', sans-serif",
+            }}>Restore</button>
+            <button onClick={handleDiscard} style={{
+              background: "transparent", border: "1px solid #444",
+              color: "#8a8580", padding: "6px 14px", borderRadius: 5,
+              cursor: "pointer", fontSize: "0.78rem", fontFamily: "'DM Sans', sans-serif",
+            }}>Discard</button>
+          </div>
+        </div>
+      )}
+
       <div className="print-area">
         {/* Header */}
         <div style={{ textAlign: "center", marginBottom: "20px" }}>
@@ -283,9 +338,9 @@ export default function BusinessModelCanvas() {
 
         <div style={{
           textAlign: "center", marginTop: 16, color: "#8a8580",
-          fontSize: "0.65rem", letterSpacing: 1, textTransform: "uppercase", opacity: 0.4,
+          fontSize: "0.65rem", letterSpacing: 1, textTransform: "uppercase", opacity: "0.4",
         }}>
-          Business Model Canvas Framework — Osterwalder & Pigneur
+          Business Model Canvas Framework — Osterwalder &amp; Pigneur
         </div>
       </div>
 
@@ -333,6 +388,13 @@ export default function BusinessModelCanvas() {
       }}>
         Click any field to edit · Press Enter to add items · Export PDF opens your browser's print dialog (choose "Save as PDF")
       </p>
+      {resolved && (
+        <p className="print-hide" style={{
+          textAlign: "center", color: "#444", fontSize: "0.65rem", marginTop: 6,
+        }}>
+          Changes are automatically saved to your browser
+        </p>
+      )}
     </div>
   );
 }
